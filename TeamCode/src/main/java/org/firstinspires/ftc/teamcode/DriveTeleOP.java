@@ -1,189 +1,188 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.acmerobotics.dashboard.FtcDashboard;
+import com.acmerobotics.dashboard.config.Config;
+import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
+import com.arcrobotics.ftclib.controller.PIDController;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 import com.qualcomm.robotcore.util.Range;
-//import com.qualcomm.robotcore.hardware.ColorSensor;
-//import com.qualcomm.robotcore.hardware.CRServo;
+
+import org.opencv.core.Mat;
+import org.opencv.core.Scalar;
+import org.opencv.videoio.VideoCapture;
+@Config
+@TeleOp
 
 
-@TeleOp(name = "DriveTeleOP", group = "TeleOp")
 public class DriveTeleOP extends LinearOpMode {
-    private DcMotor motor1;
-    private DcMotor motor2;
-    private DcMotor motor3;
-    private DcMotor motor4;
-    private DcMotor motorBrat;
-    private  VoltageSensor VoltageSensor0;
+    private Servo servo;
+    boolean IsOpen = false;
 
-    private Servo servo1;
+    private PIDController controller;
+    public static double Kp = 0.00157,Ki = 0.00001, Kd = 0.0001, Kf = 0.001;
+    private static VideoCapture cam = new VideoCapture(0);
+//    private static Scalar lower_blue = new Scalar(), upper_blue = new Scalar(), lower_red = new Scalar(), upper_red = new Scalar();
 
+    //Kp = 0.0017,Ki = 0, Kd = 0.00025, Kf = 0.001;
+    public static int target = 0;
+
+    private final double ticks_in_degree = 312 / 180.0;
+
+    public FtcDashboard dashboard;
+    private DcMotorEx motorbrat;
 
     @Override
-    public void runOpMode() {
-        motor1 = hardwareMap.get(DcMotor.class, "stangasus");
-        motor2 = hardwareMap.get(DcMotor.class, "dreaptasus");
-        motor3 = hardwareMap.get(DcMotor.class, "dreaptajos");
-        motor4 = hardwareMap.get(DcMotor.class, "stangajos");
-        motorBrat = hardwareMap.get(DcMotor.class, "motorbrat");
-        servo1 = hardwareMap.get(Servo.class, "servo");
-        VoltageSensor0 = hardwareMap.voltageSensor.iterator().next();
+    public void runOpMode() throws InterruptedException {
 
-        // Resetarea encoderului
+        servo = hardwareMap.get(Servo.class, "servo");
+        DcMotor frontLeftMotor = hardwareMap.dcMotor.get("stangasus");
+        DcMotor backLeftMotor = hardwareMap.dcMotor.get("stangajos");
+        DcMotor frontRightMotor = hardwareMap.dcMotor.get("dreaptasus");
+        DcMotor backRightMotor = hardwareMap.dcMotor.get("dreaptajos");
 
-        motorBrat.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        motorBrat.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        frontRightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+        backRightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
+        servo.setPosition(0.9);
 
-        servo1.setPosition(-0.5);
+        dashboard = FtcDashboard.getInstance();
+        controller = new PIDController(Kp, Ki, Kd);
+        telemetry = new MultipleTelemetry(telemetry, dashboard.getTelemetry());
+        motorbrat = hardwareMap.get(DcMotorEx.class, "motorbrat");
+        motorbrat.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+        motorbrat.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
+        // esti prajit
 
         waitForStart();
+        if (isStopRequested()) return;
 
-        while (opModeIsActive())
-        {
+        while (opModeIsActive()) {
+
+            //Movement input
+            double y = gamepad1.left_stick_y;
+            double x = gamepad1.left_stick_x * 1.1;
+            double rx = gamepad1.right_trigger - gamepad1.left_trigger;
+
+            //Movement
+            double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1);
+            double frontLeftPower = -((y - x + rx) / denominator);
+            double backLeftPower = -((y + x + rx) / denominator);
+            double frontRightPower = -((y + x - rx) / denominator);
+            double backRightPower = -((y - x - rx) / denominator);
+
+            frontLeftMotor.setPower(frontLeftPower * 0.5);
+            backLeftMotor.setPower(backLeftPower * 0.5);
+            frontRightMotor.setPower(frontRightPower * 0.62);
+            backRightMotor.setPower(backRightPower * 0.5);
+
+//            if(cam.isOpened())
+//            {
+//                Mat frame = new Mat();
+//                cam.read(frame);
+//            }
 
 
-            // Gamepad1 AxaXY joystick
+            //Deschidere si inchidere claw
 
-            double leftStickY = -gamepad1.left_stick_y;
-            double leftStickX = gamepad1.left_stick_x;
+            //PID controller calcule
+            controller.setPID(Kp, Ki, Kd);
+            int armpos = motorbrat.getCurrentPosition();
+            double Kpid = controller.calculate(armpos, target);
+            double Kff = Math.cos(Math.toRadians(target / ticks_in_degree)) * Kf;
 
-            // Gamepad1 L&R Trigger
+            double putere_pid = Kpid + Kff;
 
-            double LTrigger = gamepad1.left_trigger;
-            double RTrigger = gamepad1.right_trigger;
+            motorbrat.setPower(putere_pid);
+            telemetry.addData("pos", armpos);
+            telemetry.addData("target", target);
 
-            // Voltaj
+//            if(armpos < 0)
+//            {
+//                Kf = -0.01;
+//            }
+//            else Kf = 0.01;
 
-            double Voltaj = VoltageSensor0.getVoltage();
+            if (IsOpen) {
+                //Pozitie 90 grade
+                if (gamepad1.dpad_down) {
+                    servo.setPosition(0.9);
+                    sleep(200);
+                    target = -69;
+                }
 
-            // Gamepad1 bumper
+                //Pozitie put pixel
+                if (gamepad1.left_bumper) {
+                    servo.setPosition(0.9);
+                    sleep(200);
+                    target = 120;
 
-            boolean HalfSpeed = gamepad1.left_bumper;
+                }
+                if (gamepad1.right_bumper) {
+                    servo.setPosition(0.9);
+                    sleep(200);
+                    target = -250;
+                }
+                //Pozitie grab pixel
+                if (gamepad1.b) {
+                    servo.setPosition(0.9);
+                    sleep(200);
+                    target = -345;
 
-            // Gamepad1 butoane
+                }
+                //Pozitie defensiva
+                if (gamepad1.y) {
+                    servo.setPosition(0.9);
+                    sleep(200);
+                    target = 300;
 
-            boolean AisPressed = gamepad1.a;
-            boolean XisPressed = gamepad1.x;
-            boolean YisPressed = gamepad1.y;
-            boolean BisPressed = gamepad1.b;
+                }
+            } else {
+                if (gamepad1.dpad_down) {
+                    target = -69;
+                }
+                if (gamepad1.left_bumper) {
+                    target = 120;
+                }
+                //Pozitie put pixel
+                if (gamepad1.b) {
+                    target = -345;
+                }
+                if (gamepad1.right_bumper) {
+                    target = -250;
+                }
+                //Pozitie defensiva
+                if (gamepad1.y) {
+                    target = 300;
+                }
 
-            // Puterea care o primesc motoarele sub forma de double inregistrate de controller
-            double movePower = Range.clip(leftStickY, -1, 1);
-            double turnPower = Range.clip(leftStickX, -1, 1);
-            double rotatePower = RTrigger - LTrigger;
-
-            double power1 = Range.clip(-movePower - turnPower + rotatePower, -1, 1);
-            double power2 = Range.clip(-movePower + turnPower - rotatePower, -1, 1);
-            double power3 = Range.clip(movePower + turnPower + rotatePower, -1, 1);
-            double power4 = Range.clip(-movePower + turnPower - rotatePower, -1, 1);
-
-            // Alte variabile
-
-            boolean IsClawOpened = true;
-
-            // Controlarea bratului
-
-            if (XisPressed)
-            {
-                SetPos1();
-                motorBrat.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             }
-            else if (YisPressed)
-            {
-                SetPos2();
-                motorBrat.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            if (IsOpen) {
+                if (gamepad1.a) {
+                    IsOpen = false;
+                    servo.setPosition(0.9);
+                    sleep(200);
+                }
             }
-            else if (BisPressed)
-            {
-                SetPos3();
-                motorBrat.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            else {
+                if (gamepad1.a) {
+                    IsOpen = true;
+                    servo.setPosition(0.7);
+                    sleep(200);
+                }
             }
-
-            // Deschiderea si inchiderea clawului
-
-            if(IsClawOpened && AisPressed)
-            {
-                servo1.setPosition(1);
-                IsClawOpened = false;
-            }
-            else if (!IsClawOpened && AisPressed)
-            {
-                servo1.setPosition(0);
-                IsClawOpened = true;
-            }
-
-
-
-
-
-
-
-            // Setarea puterilor motoarelor bazat pe apasarea left bumperului
-
-            if(HalfSpeed)
-            {
-                motor1.setPower(power1/2);
-                motor2.setPower(power2/2);
-                motor3.setPower(power3/2);
-                motor4.setPower(power4/2);
-            }
-            else
-            {
-                motor1.setPower(power1);
-                motor2.setPower(power2);
-                motor3.setPower(power3);
-                motor4.setPower(power4);
-            }
-
-            // Setarea telemetriei
-
-            telemetry.addData("Motor Powers", "Motor1: %.2f, Motor2: %.2f, Motor3: %.2f, Motor4: %.2f", power1, power2, power3, power4);
-            telemetry.addData("Voltajul Bateriei", "Voltaj: %.2f", Voltaj);
-            telemetry.addData("IsClawOpen","IsClawOpened: ", IsClawOpened);
-
-
-
+            double asde = servo.getPosition();
+            telemetry.addData("pozitie", asde);
+            telemetry.addData("bol", IsOpen);
             telemetry.update();
-
-
-            sleep(10);
         }
+
+
     }
-    // Functii pentru setarea pozitiilor
-
-    // Setarea bratului pe prima pozitie
-    public void SetPos1()
-
-    {
-        int targetPosition = 0;
-        motorBrat.setTargetPosition(targetPosition);
-        motorBrat.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        motorBrat.setPower(0.5);
-    }
-    // Setarea bratului pe a doua pozitie
-    public void SetPos2()
-
-
-    {
-        int TICKS_PER_REVOLUTION = 2150;
-        int targetPosition = TICKS_PER_REVOLUTION / 100;
-        motorBrat.setTargetPosition(targetPosition);
-        motorBrat.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        motorBrat.setPower(-0.5);
-    }
-    // Setarea bratului pe a treia pozitie
-    public void SetPos3()
-    {
-        int TICKS_PER_REVOLUTION = 2150;
-        int targetPosition = TICKS_PER_REVOLUTION / 150;
-        motorBrat.setTargetPosition(targetPosition);
-        motorBrat.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        motorBrat.setPower(-0.5);
-    }
-
 }
 
