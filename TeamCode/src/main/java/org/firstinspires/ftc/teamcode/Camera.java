@@ -1,100 +1,97 @@
-//package org.firstinspires.ftc.teamcode;
-//import org.opencv.core.*;
-//import org.opencv.imgproc.Imgproc;
-//import org.opencv.videoio.VideoCapture;
-//import javax.swing.*;
-//import java.awt.image.BufferedImage;
-//
-//public class Camera {
-//    private static final Scalar LOWER_BLUE = new Scalar(100, 100, 100);
-//    private static final Scalar UPPER_BLUE = new Scalar(130, 255, 255);
-//    private static final Scalar LOWER_RED = new Scalar(0, 100, 100);
-//    private static final Scalar UPPER_RED = new Scalar(10, 255, 255);
-//
-//    public static void main(String[] args) {
-//        System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
-//
-//        JFrame frame = new JFrame("Color Detection");
-//        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-//        frame.setSize(640, 480);
-//        frame.setVisible(true);
-//
-//        VideoCapture capture = new VideoCapture(0);
-//
-//        if (!capture.isOpened()) {
-//            System.out.println("Error: Camera not detected!");
-//            return;
-//        }
-//
-//        Mat frameMat = new Mat();
-//
-//        while (capture.isOpened()) {
-//            if (capture.read(frameMat)) {
-//                Mat maskBlue = detectColor(frameMat, LOWER_BLUE, UPPER_BLUE);
-//                Mat maskRed = detectColor(frameMat, LOWER_RED, UPPER_RED);
-//
-//                int blueCount = countNonZero(maskBlue);
-//                int redCount = countNonZero(maskRed);
-//
-//                if (blueCount > redCount)
-//                    displayImage(frame, matToBufferedImage(maskBlue));
-//                else
-//                if (redCount > blueCount)
-//                    displayImage(frame, matToBufferedImage(maskRed));
-//
-//                maskBlue.release();
-//                maskRed.release();
-//            } else {
-//                System.out.println("Error: Could not read frame");
-//                break;
-//            }
-//        }
-//        capture.release();
-//    }
-//
-//    private static Mat detectColor(Mat frame, Scalar lowerColor, Scalar upperColor) {
-//        Mat hsvImage = new Mat();
-//        Imgproc.cvtColor(frame, hsvImage, Imgproc.COLOR_BGR2HSV);
-//
-//        Mat mask = new Mat();
-//        Core.inRange(hsvImage, lowerColor, upperColor, mask);
-//
-//        hsvImage.release();
-//
-//        return mask;
-//    }
-//
-//    private static int countNonZero(Mat mat) {
-//        Mat nonZero = new Mat();
-//        Core.findNonZero(mat, nonZero);
-//
-//        int count = (int) nonZero.total();
-//
-//        nonZero.release();
-//
-//        return count;
-//    }
-//
-//    private static void displayImage(JFrame frame, BufferedImage image) {
-//        frame.setContentPane(new JLabel(new ImageIcon(image)));
-//        frame.pack();
-//    }
-//
-//    private static BufferedImage matToBufferedImage(Mat matrix) {
-//        int cols = matrix.cols();
-//        int rows = matrix.rows();
-//        int elemSize = (int) matrix.elemSize();
-//        byte[] data = new byte[cols * rows * elemSize];
-//        matrix.get(0, 0, data);
-//        int type;
-//        if (matrix.channels() == 1)
-//            type = BufferedImage.TYPE_BYTE_GRAY;
-//        else
-//            type = BufferedImage.TYPE_3BYTE_BGR;
-//
-//        BufferedImage image = new BufferedImage(cols, rows, type);
-//        image.getRaster().setDataElements(0, 0, cols, rows, data);
-//
-//        return image;
-//    }
-//}
+/*
+ * Copyright (c) 2019 OpenFTC Team
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+package org.firstinspires.ftc.teamcode;
+
+import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+
+import org.firstinspires.ftc.robotcore.external.Telemetry;
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.opencv.core.Core;
+import org.opencv.core.Mat;
+import org.opencv.core.Point;
+import org.opencv.core.Rect;
+import org.opencv.core.Scalar;
+import org.opencv.imgproc.Imgproc;
+import org.openftc.easyopencv.OpenCvCamera;
+import org.openftc.easyopencv.OpenCvCameraFactory;
+import org.openftc.easyopencv.OpenCvCameraRotation;
+import org.openftc.easyopencv.OpenCvInternalCamera;
+import org.openftc.easyopencv.OpenCvPipeline;
+import org.openftc.easyopencv.OpenCvWebcam;
+
+@TeleOp
+public class Camera extends OpMode
+{
+    OpenCvWebcam cam = null;
+    @Override
+    public void init() {
+        WebcamName name = hardwareMap.get(WebcamName.class, "cam");
+        int CameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("camera_monitor_value", "id", hardwareMap.appContext.getPackageName());
+        cam = OpenCvCameraFactory.getInstance().createWebcam(name, CameraMonitorViewId);
+
+        cam.setPipeline(new Pipeline());
+        cam.openCameraDeviceAsync(new OpenCvCamera.AsyncCameraOpenListener() {
+            @Override
+            public void onOpened() {
+                cam.startStreaming(640, 360, OpenCvCameraRotation.UPRIGHT);
+            }
+
+            @Override
+            public void onError(int errorCode) {
+
+            }
+        })
+    }
+
+    @Override
+    public void loop() {
+
+    }
+
+    public static class Pipeline extends OpenCvPipeline {
+        Mat test = new Mat();
+        Mat leftcrop, rightcrop;
+        double leftavgfin, rightavgfin;
+
+        Mat output = new Mat();
+        Scalar rect_color = new Scalar(255.0, 0.0, 0.0);
+        public Mat processFrame(Mat input) {
+            Rect leftRect = new Rect(1, 1, 319, 359);
+            Rect rightRect = new Rect(320, 1, 319, 359);
+
+            input.copyTo(output);
+            Imgproc.rectangle(output, leftRect, rect_color, 2);
+            Imgproc.rectangle(output, rightRect, rect_color, 2);
+
+            leftcrop = test.submat(leftRect);
+            rightcrop = test.submat(rightRect);
+
+            Core.extractChannel(leftcrop, leftcrop, 2);
+            Core.extractChannel(rightcrop, rightcrop, 2);
+
+            return output;
+        }
+    }
+}
