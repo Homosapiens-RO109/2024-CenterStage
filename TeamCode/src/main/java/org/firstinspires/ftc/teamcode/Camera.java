@@ -62,7 +62,7 @@ public class Camera extends OpMode
             public void onError(int errorCode) {
 
             }
-        })
+        });
     }
 
     @Override
